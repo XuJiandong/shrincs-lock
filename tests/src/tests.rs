@@ -133,6 +133,49 @@ fn sign_tx_stateful(
     build_signed_tx(tx, signature, witnesses)
 }
 
+/// Serialize a SHRINCS public key into the 32-byte script args layout
+/// (16-byte `seed` ‖ 16-byte `root`).
+fn serialize_pk(pk: &PublicKey) -> [u8; 32] {
+    let mut pk_bytes = [0u8; 32];
+    pk_bytes[..16].copy_from_slice(&pk.seed);
+    pk_bytes[16..].copy_from_slice(&pk.root);
+    pk_bytes
+}
+
+/// Deploy the contract and build a complete, unsigned one-input / one-output
+/// transaction whose input cell is locked by a lock script carrying `args`.
+/// Returns the context alongside the transaction (the context must outlive the
+/// tx's input cells).
+fn build_unlock_tx(args: Bytes) -> (Context, TransactionView) {
+    let mut context = Context::default();
+    let out_point = context.deploy_cell_by_name("shrincs-lock");
+    let lock_script = context.build_script(&out_point, args).expect("script");
+
+    let input_out_point = context.create_cell(
+        CellOutput::new_builder()
+            .capacity(1000)
+            .lock(lock_script.clone())
+            .build(),
+        Bytes::new(),
+    );
+    let input = CellInput::new_builder()
+        .previous_output(input_out_point)
+        .build();
+    let output = CellOutput::new_builder()
+        .capacity(1000)
+        .lock(lock_script)
+        .build();
+
+    let tx = TransactionBuilder::default()
+        .input(input)
+        .output(output)
+        .output_data(Bytes::new())
+        .build();
+    let tx = context.complete_tx(tx);
+
+    (context, tx)
+}
+
 #[test]
 fn test_shrincs_lock_unlock() {
     // Generate a SHRINCS key pair.
@@ -357,65 +400,45 @@ fn test_shrincs_lock_stateful_invalid_state() {
 }
 
 #[test]
-fn test_shrincs_lock_wrong_message() {
+fn test_shrincs_lock_wrong_message_stateless() {
     // Generate a SHRINCS key pair.
     let mut pk = PublicKey::default();
     let mut sk = SecretKey::default();
     let mut state = State::default();
     key_gen::<SHRINCS_B>(&mut pk, &mut sk, &mut state).expect("key gen");
 
-    let mut pk_bytes = [0u8; 32];
-    pk_bytes[..16].copy_from_slice(&pk.seed);
-    pk_bytes[16..].copy_from_slice(&pk.root);
-
-    let mut context = Context::default();
-    let out_point = context.deploy_cell_by_name("shrincs-lock");
-    let lock_script = context
-        .build_script(&out_point, Bytes::from(pk_bytes.to_vec()))
-        .expect("script");
-
-    let input_out_point = context.create_cell(
-        CellOutput::new_builder()
-            .capacity(1000)
-            .lock(lock_script.clone())
-            .build(),
-        Bytes::new(),
-    );
-    let input = CellInput::new_builder()
-        .previous_output(input_out_point)
-        .build();
-    let outputs = vec![
-        CellOutput::new_builder()
-            .capacity(1000)
-            .lock(lock_script)
-            .build(),
-    ];
-    let outputs_data = vec![Bytes::new(); 1];
-
-    let tx = TransactionBuilder::default()
-        .input(input)
-        .outputs(outputs)
-        .outputs_data(outputs_data.pack())
-        .build();
-    let tx = context.complete_tx(tx);
+    let (context, tx) = build_unlock_tx(Bytes::from(serialize_pk(&pk).to_vec()));
 
     // Sign a DIFFERENT (wrong) message, so verification must fail.
     let wrong_message = [0xABu8; 32];
     let signature = sign_stateless::<SHRINCS_B>(&wrong_message, &sk).expect("sign");
-
-    let witness = WitnessArgs::new_builder()
-        .lock(Some(Bytes::from(signature)).pack())
-        .build();
-    let tx = tx
-        .as_advanced_builder()
-        .set_witnesses(vec![witness.as_bytes().pack()])
-        .build();
+    let (_, witnesses) = tx_message(&context, &tx);
+    let tx = build_signed_tx(tx, signature, witnesses);
 
     assert!(context.verify_tx(&tx, MAX_CYCLES).is_err());
 }
 
 #[test]
-fn test_shrincs_lock_wrong_pubkey() {
+fn test_shrincs_lock_wrong_message_stateful() {
+    let mut pk = PublicKey::default();
+    let mut sk = SecretKey::default();
+    let mut state = State::default();
+    key_gen::<SHRINCS_B>(&mut pk, &mut sk, &mut state).expect("key gen");
+
+    let (context, tx) = build_unlock_tx(Bytes::from(serialize_pk(&pk).to_vec()));
+
+    // Sign a DIFFERENT (wrong) message with a stateful signature, so
+    // verification must fail.
+    let wrong_message = [0xABu8; 32];
+    let signature = sign_stateful::<SHRINCS_B>(&wrong_message, &mut sk, &mut state).expect("sign");
+    let (_, witnesses) = tx_message(&context, &tx);
+    let tx = build_signed_tx(tx, signature, witnesses);
+
+    assert!(context.verify_tx(&tx, MAX_CYCLES).is_err());
+}
+
+#[test]
+fn test_shrincs_lock_wrong_pubkey_stateless() {
     let mut pk = PublicKey::default();
     let mut sk = SecretKey::default();
     let mut state = State::default();
@@ -427,48 +450,33 @@ fn test_shrincs_lock_wrong_pubkey() {
     let mut other_state = State::default();
     key_gen::<SHRINCS_B>(&mut other_pk, &mut other_sk, &mut other_state).expect("key gen");
 
-    let mut pk_bytes = [0u8; 32];
-    pk_bytes[..16].copy_from_slice(&pk.seed);
-    pk_bytes[16..].copy_from_slice(&pk.root);
+    let (context, tx) = build_unlock_tx(Bytes::from(serialize_pk(&other_pk).to_vec()));
 
-    let mut other_pk_bytes = [0u8; 32];
-    other_pk_bytes[..16].copy_from_slice(&other_pk.seed);
-    other_pk_bytes[16..].copy_from_slice(&other_pk.root);
-
-    let mut context = Context::default();
-    let out_point = context.deploy_cell_by_name("shrincs-lock");
     // Script args carry `other_pk`, but we sign with `sk` (whose pk is `pk`),
     // so verification must fail.
-    let lock_script = context
-        .build_script(&out_point, Bytes::from(other_pk_bytes.to_vec()))
-        .expect("script");
-
-    let input_out_point = context.create_cell(
-        CellOutput::new_builder()
-            .capacity(1000)
-            .lock(lock_script.clone())
-            .build(),
-        Bytes::new(),
-    );
-    let input = CellInput::new_builder()
-        .previous_output(input_out_point)
-        .build();
-    let outputs = vec![
-        CellOutput::new_builder()
-            .capacity(1000)
-            .lock(lock_script)
-            .build(),
-    ];
-    let outputs_data = vec![Bytes::new(); 1];
-
-    let tx = TransactionBuilder::default()
-        .input(input)
-        .outputs(outputs)
-        .outputs_data(outputs_data.pack())
-        .build();
-    let tx = context.complete_tx(tx);
-
     let tx = sign_tx_stateless(&context, tx, &sk);
+
+    assert!(context.verify_tx(&tx, MAX_CYCLES).is_err());
+}
+
+#[test]
+fn test_shrincs_lock_wrong_pubkey_stateful() {
+    let mut pk = PublicKey::default();
+    let mut sk = SecretKey::default();
+    let mut state = State::default();
+    key_gen::<SHRINCS_B>(&mut pk, &mut sk, &mut state).expect("key gen");
+
+    // A different, unrelated public key placed in the script args.
+    let mut other_pk = PublicKey::default();
+    let mut other_sk = SecretKey::default();
+    let mut other_state = State::default();
+    key_gen::<SHRINCS_B>(&mut other_pk, &mut other_sk, &mut other_state).expect("key gen");
+
+    let (context, tx) = build_unlock_tx(Bytes::from(serialize_pk(&other_pk).to_vec()));
+
+    // Sign with `sk` (whose pk is `pk`), but the script args carry `other_pk`,
+    // so verification must fail.
+    let tx = sign_tx_stateful(&context, tx, &mut sk, &mut state);
 
     assert!(context.verify_tx(&tx, MAX_CYCLES).is_err());
 }
