@@ -1,0 +1,42 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    name: build and test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # The on-chain contract crate depends on ckb-opt-sha256 (via shrincs-rs),
+      # whose build.rs compiles src/sha256.c with clang (via the clang-finder
+      # crate), so the LLVM toolchain must be installed before any cargo
+      # command runs. scripts/find_clang also requires clang 16+.
+      - name: Install LLVM toolchain (clang)
+        uses: KyleMayes/install-llvm-action@v2.0.9
+        with:
+          version: "19"
+
+      # Keep `toolchain`, `components` and `targets` in sync with
+      # rust-toolchain.toml: that file overrides rustup's default toolchain,
+      # so CI actually runs on the channel pinned there, and rustup only
+      # auto-installs the components/targets listed in it.
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: 1.95.0
+          components: rustfmt, clippy
+          targets: riscv64imac-unknown-none-elf
+
+      - name: Cache cargo build
+        uses: Swatinem/rust-cache@v2.9.2
+
+      - name: make build
+        run: make build
+
+      - name: make test
+        run: make test
