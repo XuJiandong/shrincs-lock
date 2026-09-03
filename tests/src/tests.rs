@@ -235,7 +235,7 @@ fn test_shrincs_lock_unlock() {
     let cycles = context
         .verify_tx(&tx, MAX_CYCLES)
         .expect("pass verification");
-    println!("consume cycles: {}", cycles);
+    println!("consume cycles: {:.1} million", cycles as f64 / 1_000_000.0);
 }
 
 /// Sign multiple transactions **statelessly** with the same key and verify each
@@ -297,9 +297,10 @@ fn test_shrincs_lock_stateless() {
         assert_eq!(signature.len(), <SHRINCS_B as shrincs::Params>::SL_SIZE);
         assert!(signature.len() > <SHRINCS_B as shrincs::Params>::MAX_SF_SIZE);
 
-        let _cycles = context
+        let cycles = context
             .verify_tx(&tx, MAX_CYCLES)
             .expect("pass stateless verification");
+        println!("consume cycles: {:.1} million", cycles as f64 / 1_000_000.0);
     }
 }
 
@@ -374,9 +375,10 @@ fn test_shrincs_lock_stateful() {
         assert!(!signature.is_empty());
 
         // Run; must pass verification.
-        let _cycles = context
+        let cycles = context
             .verify_tx(&tx, MAX_CYCLES)
             .expect("pass stateful verification");
+        println!("consume cycles: {:.1} million", cycles as f64 / 1_000_000.0);
     }
 }
 
