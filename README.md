@@ -33,6 +33,18 @@ make test
 ```
 
 
+## Deployment
+
+- Testnet
+
+| parameter   | value                                                                |
+| ----------- | -------------------------------------------------------------------- |
+| `code_hash` | `0x387496fafe46562bb3bb2fa4446f1fc1054ba2f1b4df229a88056d5422a196ac` |
+| `hash_type` | `type`                                                               |
+| `tx_hash`   | `0x3216d00b72e8229d7dbb46a93ea47bd0c650f2bdae42be2f92837328413da48e` |
+| `index`     | `0x0`                                                                |
+| `dep_type`  | `code`                                                               |
+
 *This project was bootstrapped with [ckb-script-templates].*
 
 [ckb-script-templates]: https://github.com/nervosnetwork/ckb-script-templates

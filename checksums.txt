@@ -1,0 +1,1 @@
+1dae35ca1ae42da9d3bb14e1ecb1c95ef31a06389a4fde4d252374d13d5f1d14  build/release/shrincs-lock
