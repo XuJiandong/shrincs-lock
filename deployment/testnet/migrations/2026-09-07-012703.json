@@ -1,0 +1,13 @@
+{
+  "cell_recipes": [
+    {
+      "name": "shrincs-lock",
+      "tx_hash": "0x3216d00b72e8229d7dbb46a93ea47bd0c650f2bdae42be2f92837328413da48e",
+      "index": 0,
+      "occupied_capacity": 9542200000000,
+      "data_hash": "0x9ab6e4b3ca1ede776acd5f419c762128083aad27a4791256f95fb6e044e66c13",
+      "type_id": "0x387496fafe46562bb3bb2fa4446f1fc1054ba2f1b4df229a88056d5422a196ac"
+    }
+  ],
+  "dep_group_recipes": []
+}

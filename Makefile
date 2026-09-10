@@ -148,7 +148,7 @@ prepare:
 # Generate checksum info for reproducible build
 CHECKSUM_FILE := build/checksums-$(MODE).txt
 checksum: build
-	shasum -a 256 build/$(MODE)/* > $(CHECKSUM_FILE)
+	shasum -a 256 build/$(MODE)/shrincs-lock > $(CHECKSUM_FILE)
 
 # ============================================================================
 # Coverage targets (using native-simulator mode)
